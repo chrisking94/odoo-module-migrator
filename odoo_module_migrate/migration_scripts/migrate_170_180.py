@@ -14,7 +14,8 @@ def replace_tree_with_list_in_views(
     reg_tree_to_list_xml_mode = re.compile(
         r"""(<field[^>]* name=["'](view_mode|name|binding_view_types)["'][^>]*>([^<>]+[,.])?\s*)tree(\s*([,.][^<>]+)?</field>)"""
     )
-    reg_tree_to_list_tag = re.compile(r"([<,/])tree([ \n\r,>/])")
+    # (?<!://) prevents corrupting URLs like https://.../tree/main
+    reg_tree_to_list_tag = re.compile(r"(?<!://)([<,/])tree([ \n\r,>/])")
     reg_tree_to_list_xpath = re.compile(
         r"""(<xpath[^>]* expr=['"])([^<>]*/)?tree(/|[\['"])"""
     )
