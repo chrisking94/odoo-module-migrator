@@ -36,14 +36,35 @@ def migrate_expression_to_domain(
             content = re.sub(r"expression\.AND\(", "Domain.AND(", content)
             content = re.sub(r"expression\.OR\(", "Domain.OR(", content)
 
-            content = re.sub(r"(?<!\.)AND\(", "Domain.AND(", content)
-            content = re.sub(r"(?<!\.)OR\(", "Domain.OR(", content)
+            # Replace bare AND(/OR( with Domain.AND(/OR(
+            # Exclude BOOL_AND/BOOL_OR (PostgreSQL aggregates) to avoid
+            # corrupting SQL strings like "HAVING BOOL_OR(...)".
+            content = re.sub(r"(?<!\.)(?<!BOOL_)AND\(", "Domain.AND(", content)
+            content = re.sub(r"(?<!\.)(?<!BOOL_)OR\(", "Domain.OR(", content)
 
             content = re.sub(
                 r"from odoo\.fields import Domain, (AND|OR|AND, OR|OR, AND)",
                 "from odoo.fields import Domain",
                 content,
             )
+
+            # Ensure Domain is imported when bare AND/OR were replaced
+            # (handles import styles not covered by the patterns above).
+            if "Domain." in content and "from odoo.fields import Domain" not in content:
+                # Insert import at the top of the file, after existing imports
+                import_line = "from odoo.fields import Domain"
+                # Try to insert after the last existing import line
+                lines = content.split("\n")
+                last_import_idx = -1
+                for i, line in enumerate(lines):
+                    stripped = line.strip()
+                    if stripped.startswith("from ") or stripped.startswith("import "):
+                        last_import_idx = i
+                if last_import_idx >= 0:
+                    lines.insert(last_import_idx + 1, import_line)
+                else:
+                    lines.insert(0, import_line)
+                content = "\n".join(lines)
 
             lines = content.split("\n")
             seen_domain_import = False
