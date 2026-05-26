@@ -36,11 +36,31 @@ def migrate_expression_to_domain(
             content = re.sub(r"expression\.AND\(", "Domain.AND(", content)
             content = re.sub(r"expression\.OR\(", "Domain.OR(", content)
 
+            # --- Protect strings and comments from bare AND/OR replacement ---
+            # Triple-quoted strings (docstrings) and comments may contain
+            # example code like "AND(expr + [OR(...)])" that must NOT be
+            # turned into "Domain.AND(Domain.OR(...))".
+            _preserve = {}
+
+            def _save(m):
+                key = f"\x00PRESERVE_{len(_preserve)}\x00"
+                _preserve[key] = m.group(0)
+                return key
+
+            content = re.sub(r'""".*?"""', _save, content, flags=re.DOTALL)
+            content = re.sub(r"'''.*?'''", _save, content, flags=re.DOTALL)
+            content = re.sub(r'^[ \t]*#.*$', _save, content, flags=re.MULTILINE)
+
             # Replace bare AND(/OR( with Domain.AND(/OR(
             # Exclude BOOL_AND/BOOL_OR (PostgreSQL aggregates) to avoid
             # corrupting SQL strings like "HAVING BOOL_OR(...)".
             content = re.sub(r"(?<!\.)(?<!BOOL_)AND\(", "Domain.AND(", content)
             content = re.sub(r"(?<!\.)(?<!BOOL_)OR\(", "Domain.OR(", content)
+
+            # Restore preserved strings / comments
+            for key, original in _preserve.items():
+                content = content.replace(key, original)
+            # --- End protection ---
 
             content = re.sub(
                 r"from odoo\.fields import Domain, (AND|OR|AND, OR|OR, AND)",
@@ -51,15 +71,24 @@ def migrate_expression_to_domain(
             # Ensure Domain is imported when bare AND/OR were replaced
             # (handles import styles not covered by the patterns above).
             if "Domain." in content and "from odoo.fields import Domain" not in content:
-                # Insert import at the top of the file, after existing imports
                 import_line = "from odoo.fields import Domain"
-                # Try to insert after the last existing import line
+                # Insert after the last top-level import.  Stop scanning
+                # once we encounter real code (class/def/decorator/assignment)
+                # to avoid picking up local imports inside function bodies.
                 lines = content.split("\n")
                 last_import_idx = -1
                 for i, line in enumerate(lines):
                     stripped = line.strip()
                     if stripped.startswith("from ") or stripped.startswith("import "):
                         last_import_idx = i
+                    elif (
+                        stripped
+                        and not stripped.startswith("#")
+                        and not stripped.startswith('"""')
+                        and not stripped.startswith("'''")
+                    ):
+                        # Hit non-import code — end of top-level import block
+                        break
                 if last_import_idx >= 0:
                     lines.insert(last_import_idx + 1, import_line)
                 else:
@@ -189,9 +218,170 @@ def _remove_group_attrs_in_search_views(
             logger.error(f"Error processing XML file {file_path}: {e}")
 
 
+def migrate_underscore_translate(
+    logger, module_path, module_name, manifest_path, migration_steps, tools
+):
+    """In Odoo 19+ `_` moved from `odoo` to `odoo.tools.translate`.
+
+    Converts:
+        from odoo import models, _, fields   → from odoo import models, fields
+                                                from odoo.tools.translate import _
+        from odoo import _ as translate       → from odoo.tools.translate import _ as translate
+        from odoo import (models, _, fields)  → from odoo import (models, fields)
+                                                from odoo.tools.translate import _
+        from odoo import _, models  # noqa    → from odoo import models  # noqa
+                                                from odoo.tools.translate import _
+    """
+    files_to_process = tools.get_files(module_path, (".py",))
+
+    single_import_re = re.compile(
+        r'^(?P<indent>[ \t]*)from odoo import (?P<names>.+)$'
+    )
+    multi_import_re = re.compile(
+        r'^(?P<indent>[ \t]*)from odoo import\s*\((?P<body>.*?)\)\s*$',
+        re.MULTILINE | re.DOTALL,
+    )
+
+    for file in files_to_process:
+        try:
+            content = tools._read_content(file)
+            original = content
+            needs_translate = False
+            _alias_name = None
+
+            # ------------------------------------------------------------
+            # Step 1: Handle multi-line from odoo import (...) blocks
+            # ------------------------------------------------------------
+            def _replace_multi(match):
+                nonlocal needs_translate, _alias_name
+                indent = match.group("indent")
+                body = match.group("body")
+
+                names = [n.strip() for n in re.split(r',\s*', body)]
+                names = [n for n in names if n]
+
+                has_underscore = False
+                for n in names:
+                    if n == '_':
+                        has_underscore = True
+                    elif n.startswith('_ as '):
+                        has_underscore = True
+                        _alias_name = n
+
+                if not has_underscore:
+                    return match.group(0)
+
+                needs_translate = True
+                new_names = [n for n in names if n != '_'
+                             and not n.startswith('_ as ')]
+                if not new_names:
+                    return ""
+
+                result_lines = [f"{indent}from odoo import ("]
+                for i, name in enumerate(new_names):
+                    result_lines.append(f"{indent}    {name},")
+                result_lines.append(f"{indent})")
+                return "\n".join(result_lines)
+
+            content = multi_import_re.sub(_replace_multi, content)
+
+            # ------------------------------------------------------------
+            # Step 2: Handle single-line from odoo import ... lines
+            # ------------------------------------------------------------
+            lines = content.split("\n")
+            new_lines = []
+
+            for line in lines:
+                m = single_import_re.match(line)
+                if m:
+                    raw_names = m.group("names")
+                    comment_match = re.match(r'(.+?)(\s*#.*)$', raw_names)
+                    if comment_match:
+                        clean_names = comment_match.group(1)
+                        trail_comment = comment_match.group(2)
+                    else:
+                        clean_names = raw_names
+                        trail_comment = ""
+
+                    if re.search(r'\b_\b', raw_names):
+                        names = [n.strip() for n in clean_names.split(",")]
+                        new_names = [n for n in names
+                                     if n != '_' and not n.startswith('_ as ')]
+
+                        for n in names:
+                            if n.startswith('_ as '):
+                                _alias_name = n
+
+                        if ('_' in names and set(new_names) != set(names)) or \
+                           any(n.startswith('_ as ') for n in names):
+                            needs_translate = True
+                            indent = m.group("indent")
+                            if new_names:
+                                rebuild = (
+                                    f"{indent}from odoo import "
+                                    f"{', '.join(new_names)}"
+                                )
+                                if trail_comment:
+                                    rebuild += trail_comment
+                                new_lines.append(rebuild)
+                            continue
+                new_lines.append(line)
+
+            content = "\n".join(new_lines)
+
+            # ------------------------------------------------------------
+            # Step 3: Insert the new import
+            # ------------------------------------------------------------
+            if _alias_name:
+                translate_import = f"from odoo.tools.translate import {_alias_name}"
+                check_line = "from odoo.tools.translate import _"
+            else:
+                translate_import = "from odoo.tools.translate import _"
+                check_line = translate_import
+
+            if needs_translate and check_line not in content:
+                if _alias_name and translate_import in content:
+                    pass  # already present
+                elif not _alias_name:
+                    pass
+                else:
+                    needs_translate = False
+
+            if needs_translate and check_line not in content:
+                new_lines = content.split("\n")
+                last_import_idx = -1
+                for i, line in enumerate(new_lines):
+                    stripped = line.strip()
+                    if stripped.startswith("from ") or stripped.startswith("import "):
+                        last_import_idx = i
+                    elif (
+                        stripped
+                        and not stripped.startswith("#")
+                        and not stripped.startswith('"""')
+                        and not stripped.startswith("'''")
+                    ):
+                        break
+                if last_import_idx >= 0:
+                    new_lines.insert(last_import_idx + 1, translate_import)
+                else:
+                    new_lines.insert(0, translate_import)
+                content = "\n".join(new_lines)
+
+            if content != original:
+                tools._write_content(file, content)
+                logger.info(
+                    f"Migrated _ translate import to odoo.tools.translate "
+                    f"in: {file}"
+                )
+
+        except Exception as e:
+            logger.error(f"Error processing file {file}: {str(e)}")
+
+
 class MigrationScript(BaseMigrationScript):
     _GLOBAL_FUNCTIONS = [
         upgrade_sql_constraints,
         migrate_expression_to_domain,
         _remove_group_attrs_in_search_views,
+        migrate_underscore_translate,
     ]
