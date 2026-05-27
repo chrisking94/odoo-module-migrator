@@ -10,12 +10,22 @@ def replace_tree_with_list_in_views(
     logger, module_path, module_name, manifest_path, migration_steps, tools
 ):
     files_to_process = tools.get_files(module_path, (".xml", ".js", ".py"))
+    # Exclude manifest files and static/ directory to avoid corrupting
+    # URLs (e.g. GitHub links containing "/tree/main") and other non-view content.
+    files_to_process = [
+        f for f in files_to_process
+        if f.name not in ("__manifest__.py", "__openerp__.py")
+        and "static" not in f.parts
+    ]
 
     reg_tree_to_list_xml_mode = re.compile(
         r"""(<field[^>]* name=["'](view_mode|name|binding_view_types)["'][^>]*>([^<>]+[,.])?\s*)tree(\s*([,.][^<>]+)?</field>)"""
     )
-    # (?<!://) prevents corrupting URLs like https://.../tree/main
-    reg_tree_to_list_tag = re.compile(r"(?<!://)([<,/])tree([ \n\r,>/])")
+    # Match <tree>, </tree>, ,tree in XML tags and view_mode strings.
+    # Group 1 captures '<', '</', or ',' to distinguish XML tags from URL
+    # paths like /tree/main. The </ is captured as a unit so that bare
+    # /tree/ in GitHub URLs is never matched.
+    reg_tree_to_list_tag = re.compile(r"(?<!://)(</|<|,)tree([ \n\r,>/])")
     reg_tree_to_list_xpath = re.compile(
         r"""(<xpath[^>]* expr=['"])([^<>]*/)?tree(/|[\['"])"""
     )
@@ -89,6 +99,13 @@ def replace_deprecated_kanban_box_card_menu(
     logger, module_path, module_name, manifest_path, migration_steps, tools
 ):
     files_to_process = tools.get_files(module_path, (".xml", ".js", ".py"))
+    # Exclude manifest files and static/ directory to avoid corrupting
+    # URLs (e.g. GitHub links containing "/tree/main") and other non-view content.
+    files_to_process = [
+        f for f in files_to_process
+        if f.name not in ("__manifest__.py", "__openerp__.py")
+        and "static" not in f.parts
+    ]
     replaces = {
         "kanban-card": "card",
         "kanban-box": "card",
@@ -174,6 +191,13 @@ def replace_editable_attribute(
     logger, module_path, module_name, manifest_path, migration_steps, tools
 ):
     files_to_process = tools.get_files(module_path, (".xml", ".js", ".py"))
+    # Exclude manifest files and static/ directory to avoid corrupting
+    # URLs (e.g. GitHub links containing "/tree/main") and other non-view content.
+    files_to_process = [
+        f for f in files_to_process
+        if f.name not in ("__manifest__.py", "__openerp__.py")
+        and "static" not in f.parts
+    ]
     replaces = {
         'editable="1"': 'editable="bottom"',
         "editable='1'": 'editable="bottom"',
