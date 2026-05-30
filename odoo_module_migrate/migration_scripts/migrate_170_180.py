@@ -214,6 +214,66 @@ def replace_editable_attribute(
             logger.error(f"Error processing file {file}: {str(e)}")
 
 
+def add_jquery_to_asset_bundles(
+    logger, module_path, module_name, manifest_path, migration_steps, tools
+):
+    """From Odoo 18+, jQuery is loaded asynchronously.
+    Adding 'web/static/lib/jquery/jquery.js' as the first entry in
+    asset bundles (web.assets_backend / web.assets_frontend) ensures
+    that jQuery is fully loaded before any subsequent JS files that
+    reference `$`.
+    """
+    content = tools._read_content(manifest_path)
+
+    if "'assets'" not in content and '"assets"' not in content:
+        return
+
+    jquery_path = "web/static/lib/jquery/jquery.js"
+    bundles = ("web.assets_backend", "web.assets_frontend")
+    modified = False
+
+    for bundle in bundles:
+        for q in ('"', "'"):
+            key = f"{q}{bundle}{q}"
+            if key not in content:
+                continue
+
+            # Match: key : [ (with varied spacing)
+            match = re.search(re.escape(key) + r"\s*:\s*\[", content)
+            if not match:
+                continue
+
+            list_open_end = match.end()  # position right after [
+            tail = content[list_open_end:]
+
+            # Skip empty lists `[]`
+            if re.match(r"\s*\]", tail):
+                continue
+
+            # Check if jquery is already the first entry
+            jquery_quoted = r'["\']' + re.escape(jquery_path) + r'["\']'
+            if re.match(r"\s*" + jquery_quoted, tail):
+                continue
+
+            # Extract indent level from the first entry in the list
+            indent_match = re.match(r"\n(\s*)", tail)
+            indent = indent_match.group(1) if indent_match else "                    "
+
+            # Insert jquery as first entry
+            jquery_line = f'\n{indent}"{jquery_path}",'
+            content = content[:list_open_end] + jquery_line + content[list_open_end:]
+            modified = True
+
+    if modified:
+        tools._write_content(manifest_path, content)
+        logger.info(
+            f"[18.0] Added 'web/static/lib/jquery/jquery.js' "
+            f"as first entry in asset bundles for module '{module_name}'. "
+            f"From Odoo 18, jQuery is loaded asynchronously and must be "
+            f"placed first to guarantee `$` is available for subsequent JS."
+        )
+
+
 class MigrationScript(BaseMigrationScript):
     _GLOBAL_FUNCTIONS = [
         replace_unaccent_parameter,
@@ -223,4 +283,5 @@ class MigrationScript(BaseMigrationScript):
         replace_user_has_groups,
         replace_ustr,
         replace_editable_attribute,
+        add_jquery_to_asset_bundles,
     ]
