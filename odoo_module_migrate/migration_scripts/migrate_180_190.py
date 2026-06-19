@@ -378,10 +378,99 @@ def migrate_underscore_translate(
             logger.error(f"Error processing file {file}: {str(e)}")
 
 
+def _remove_active_from_ir_model_views(
+    logger, module_path, module_name, manifest_path, migration_steps, tools
+):
+    """Remove ``active`` field references from views inheriting ``ir.model``.
+
+    In Odoo 19, the view validator became stricter: it validates fields
+    referenced in ``decoration-*`` attributes and ``<field>`` elements
+    against the *parent* view model when the sub-view is inline (e.g. a
+    ``<list>`` inside a ``<field name="o2m_field">``).  Since ``ir.model``
+    has no ``active`` field, any reference to ``active`` inside an
+    ``ir.model`` inherited view will raise::
+
+        Field "active" does not exist in model "ir.model"
+
+    This function strips:
+    - ``decoration-*`` attributes that reference ``active`` (e.g.
+      ``decoration-muted="not active"``)
+    - ``<field name="active" .../>`` elements inside One2many sub-views
+      of ``ir.model`` inherited views.
+    """
+    files_to_process = tools.get_files(module_path, (".xml",))
+
+    for file_path in files_to_process:
+        try:
+            content = tools._read_content(file_path)
+            parser = etree.XMLParser(recover=True)
+            try:
+                tree = etree.parse(BytesIO(content.encode("utf-8")), parser)
+                root = tree.getroot()
+            except Exception:
+                continue
+
+            changed = False
+
+            # Find <record> elements whose model is "ir.model"
+            for record in root.findall(".//record[@model='ir.ui.view']"):
+                model_field = record.find(".//field[@name='model']")
+                if model_field is None or model_field.text != 'ir.model':
+                    continue
+
+                # Find all sub-view elements (<list>, <tree>, <form>) inside
+                # One2many fields and remove active references
+                for sub_view in record.findall(".//list") + record.findall(".//tree"):
+                    # Remove decoration-* attributes referencing 'active'
+                    attrs_to_remove = []
+                    for attr_name, attr_value in sub_view.attrib.items():
+                        if attr_name.startswith("decoration-") and "active" in attr_value:
+                            attrs_to_remove.append(attr_name)
+                    for attr_name in attrs_to_remove:
+                        del sub_view.attrib[attr_name]
+                        changed = True
+                        logger.info(
+                            f"Removed {attr_name}=\"{attr_value}\" from "
+                            f"ir.model sub-view in {file_path}"
+                        )
+
+                    # Remove <field name="active" .../> elements
+                    fields_to_remove = []
+                    for field_elem in sub_view.findall("field"):
+                        if field_elem.get("name") == "active":
+                            fields_to_remove.append(field_elem)
+                    for field_elem in fields_to_remove:
+                        sub_view.remove(field_elem)
+                        changed = True
+                        logger.info(
+                            f"Removed <field name=\"active\"/> from "
+                            f"ir.model sub-view in {file_path}"
+                        )
+
+            if changed:
+                new_content = etree.tostring(
+                    root, encoding="utf-8", xml_declaration=True
+                ).decode("utf-8")
+                new_content = new_content.replace(
+                    "<?xml version='1.0' encoding='utf-8'?>",
+                    '<?xml version="1.0" encoding="utf-8"?>',
+                )
+                if not new_content.endswith("\n"):
+                    new_content += "\n"
+                tools._write_content(file_path, new_content)
+                logger.info(
+                    f"Removed active field references from ir.model views: {file_path}"
+                )
+
+        except Exception as e:
+            logger.error(f"Error processing XML file {file_path}: {e}")
+
+
 class MigrationScript(BaseMigrationScript):
     _GLOBAL_FUNCTIONS = [
         upgrade_sql_constraints,
         migrate_expression_to_domain,
         _remove_group_attrs_in_search_views,
         migrate_underscore_translate,
+        _remove_active_from_ir_model_views,
     ]
