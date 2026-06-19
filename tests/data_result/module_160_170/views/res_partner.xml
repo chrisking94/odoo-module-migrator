@@ -15,6 +15,9 @@
                     </tree>
                 </field>
                 <field name="test_field_2" invisible="False # could not parse ['faulty domain']" required="not (((a or b == 42) and c == 43))" readonly="a == 1 and (b == 2 or c == 3) and d == 4"/>
+                <field name="state_field" invisible="state not in ('draft', 'open')"/>
+                <field name="confirmed_field" invisible="state != 'confirmed'"/>
+                <widget name="web_ribbon" title="Draft" invisible="state != 'draft'"/>
             </field>
             <field name="zip" position="attributes">
                 <attribute name="required">a == 1</attribute></field>

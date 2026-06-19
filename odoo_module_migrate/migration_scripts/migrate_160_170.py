@@ -261,8 +261,19 @@ def _check_open_form_view(logger, file_path: Path):
         )
 
 
+def _get_node_name(node):
+    """Get the name string from an ast.Constant or ast.Name node."""
+    if isinstance(node, ast.Constant):
+        return str(node.value)
+    if isinstance(node, ast.Name):
+        return node.id
+    return ast.unparse(node)
+
+
 def _move_attrs_to_attributes_view(logger, file_path: Path):
-    """Transform <field attrs={'required': [('field', '=', value)]}> to <field required="field == value" /> in views"""
+    """Transform <field attrs={'required': [('field', '=', value)]}> to <field required="field == value" /> in views
+    Also transform states="draft,open" to invisible="state not in ('draft', 'open')" etc.
+    """
     parser = et.XMLParser()
     tree = et.parse(str(file_path.resolve()), parser)
     field_selector = "record[@model='ir.ui.view']/field[@name='arch']"
@@ -270,6 +281,7 @@ def _move_attrs_to_attributes_view(logger, file_path: Path):
 
     def leaf_to_python(leaf):
         left, operator, right = leaf.elts
+        left_name = _get_node_name(left)
         if operator.value in ("!=", "="):
             if (
                 isinstance(right, ast.Constant)
@@ -285,18 +297,18 @@ def _move_attrs_to_attributes_view(logger, file_path: Path):
                 return "{}{}{}".format(
                     falsy and "not" or "",
                     falsy and " " or "",
-                    left.value,
+                    left_name,
                 )
             if isinstance(right, ast.List) and not right.elts:
                 falsy = operator.value == "="
                 return "{}{}{}".format(
                     falsy and "not" or "",
                     falsy and " " or "",
-                    left.value,
+                    left_name,
                 )
 
         return "{} {} {}".format(
-            left.value,
+            left_name,
             operator.value if operator.value != "=" else "==",
             ast.unparse(right),
         )
@@ -392,6 +404,34 @@ def _move_attrs_to_attributes_view(logger, file_path: Path):
             for key, value in attributes.items():
                 new_node = et.SubElement(parent, "attribute", name=key)
                 new_node.text = value
+            parent.remove(node)
+            modified = True
+        # <field states="draft,open" /> → <field invisible="state not in ('draft', 'open')" />
+        for node in arch.xpath("//*[@states]"):
+            states_value = node.attrib["states"]
+            state_list = [s.strip() for s in states_value.split(",") if s.strip()]
+            if state_list:
+                states_tuple = ", ".join(f"'{s}'" for s in state_list)
+                if len(state_list) == 1:
+                    states_expr = f"state != '{state_list[0]}'"
+                else:
+                    states_expr = f"state not in ({states_tuple})"
+                node.attrib["invisible"] = states_expr
+            del node.attrib["states"]
+            modified = True
+        # inherited views: <attribute name="states">draft,open</attribute>
+        for node in arch.xpath("//attribute[@name='states']"):
+            states_value = (node.text or "").strip()
+            state_list = [s.strip() for s in states_value.split(",") if s.strip()]
+            parent = node.getparent()
+            if state_list:
+                states_tuple = ", ".join(f"'{s}'" for s in state_list)
+                if len(state_list) == 1:
+                    states_expr = f"state != '{state_list[0]}'"
+                else:
+                    states_expr = f"state not in ({states_tuple})"
+                new_node = et.SubElement(parent, "attribute", name="invisible")
+                new_node.text = states_expr
             parent.remove(node)
             modified = True
 

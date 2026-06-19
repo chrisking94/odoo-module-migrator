@@ -15,6 +15,9 @@
                     </tree>
                 </field>
                 <field name="test_field_2" attrs="{'invisible': ['faulty domain'], 'required': ['!', '&amp;', '|', ('a', '!=', False), ('b', '=', 42), ('c', '=', 43)], 'readonly': [('a', '=', 1), '|', ('b', '=', 2), ('c', '=', 3), ('d', '=', 4)]}" />
+                <field name="state_field" states="draft,open"/>
+                <field name="confirmed_field" states="confirmed"/>
+                <widget name="web_ribbon" title="Draft" states="draft"/>
             </field>
             <field name="zip" position="attributes">
                 <attribute name="attrs">{'required': [
