@@ -4,9 +4,15 @@ from odoo_module_migrate.base_migration_script import BaseMigrationScript
 
 
 def replace_toggle_button(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
-    files_to_process = tools.get_files(module_path, (".xml",))
+    files_to_process = tools.get_files(module_path, (".xml",), excluded_directories)
     replaces = {
         r'widget="\s*toggle_button\s*"': 'widget="boolean_toggle"',
         r"widget='\s*toggle_button\s*'": 'widget="boolean_toggle"',

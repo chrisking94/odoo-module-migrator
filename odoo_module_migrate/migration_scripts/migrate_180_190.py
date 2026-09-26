@@ -11,10 +11,16 @@ from odoo_module_migrate.base_migration_script import BaseMigrationScript
 
 
 def migrate_expression_to_domain(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
     """Convert odoo.osv.expression usage to odoo.fields.Domain"""
-    files_to_process = tools.get_files(module_path, (".py",))
+    files_to_process = tools.get_files(module_path, (".py",), excluded_directories)
 
     for file in files_to_process:
         try:
@@ -118,10 +124,16 @@ def migrate_expression_to_domain(
 
 
 def upgrade_sql_constraints(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
     # Odoo method in which we migrate all occurrences of _sql_constraints
-    files_to_process = tools.get_files(module_path, (".py",))
+    files_to_process = tools.get_files(module_path, (".py",), excluded_directories)
     # Regex pattern explanation:
     # (?m) - Multiline mode, ^ matches start of each line
     # ^(?![ \t]*#) - Negative lookahead: exclude lines starting with # (comments)
@@ -167,13 +179,19 @@ def upgrade_sql_constraints(
 
 
 def _remove_group_attrs_in_search_views(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
     """Remove `expand` and `string` attributes from <group> tags when they
     are inside a <search> view.
     """
 
-    files_to_process = tools.get_files(module_path, (".xml",))
+    files_to_process = tools.get_files(module_path, (".xml",), excluded_directories)
 
     for file_path in files_to_process:
         try:
@@ -219,7 +237,13 @@ def _remove_group_attrs_in_search_views(
 
 
 def migrate_underscore_translate(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
     """In Odoo 19+ `_` moved from `odoo` to `odoo.tools.translate`.
 
@@ -232,7 +256,7 @@ def migrate_underscore_translate(
         from odoo import _, models  # noqa    → from odoo import models  # noqa
                                                 from odoo.tools.translate import _
     """
-    files_to_process = tools.get_files(module_path, (".py",))
+    files_to_process = tools.get_files(module_path, (".py",), excluded_directories)
 
     single_import_re = re.compile(
         r'^(?P<indent>[ \t]*)from odoo import (?P<names>.+)$'

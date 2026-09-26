@@ -40,6 +40,7 @@ class ModuleMigration:
                 self._migration._migration_steps,
                 self._migration._directory_path,
                 self._migration._commit_enabled,
+                self._migration._excluded_directories,
             )
 
         # Run pre-commit before final commit to format any changes made during migration scripts execution

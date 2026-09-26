@@ -151,6 +151,19 @@ Available Arguments
 |``--no-commit``           | ``-nc``  | Default:        | If set, the library will not git add and git commit   |
 |                          |          | commit          | changes.                                              |
 +--------------------------+----------+-----------------+-------------------------------------------------------+
+|``--excluded-directories``| ``-ed``  | Default:        | Directory names that must never be migrated, at any   |
+|                          |          | empty           | depth of the modules. Useful for folders holding      |
+|                          |          |                 | hand-written compatibility code, e.g. ``compat``.     |
++--------------------------+----------+-----------------+-------------------------------------------------------+
+
+To exclude directories when using the library directly:
+
+.. code-block:: python
+
+    migration = Migration(
+        directory, "17.0", "18.0", module_names=["my_module"],
+        excluded_directories=["compat"],
+    )
 
 Roadmap / Known Issues
 ======================

@@ -65,9 +65,36 @@ def _replace_in_file(file_path, replaces, log_message=False):
     return new_text
 
 
-def get_files(module_path, extensions):
+def is_excluded(file_path, module_path, excluded_directories):
+    """Tell if `file_path` lives in one of the `excluded_directories`.
+
+    Excluded directories are matched by directory name, at any depth of the
+    module. Typically used to protect hand-written compatibility folders
+    (e.g. 'compat') from being rewritten by the migration scripts.
+    """
+    if not excluded_directories:
+        return False
+    try:
+        relative_path = pathlib.Path(file_path).relative_to(module_path)
+    except ValueError:
+        relative_path = pathlib.Path(file_path)
+    return any(part in excluded_directories for part in relative_path.parts[:-1])
+
+
+def filter_excluded_files(file_paths, module_path, excluded_directories):
+    """Drop files located in one of the `excluded_directories`."""
+    return [
+        file_path
+        for file_path in file_paths
+        if not is_excluded(file_path, module_path, excluded_directories)
+    ]
+
+
+def get_files(module_path, extensions, excluded_directories=()):
     """
     Returns a list of files with the specified extensions within the module_path.
+
+    Files located in one of the `excluded_directories` are skipped.
     """
     file_paths = []
     module_dir = pathlib.Path(module_path)
@@ -78,4 +105,4 @@ def get_files(module_path, extensions):
     for ext in extensions:
         file_paths.extend(module_dir.rglob(f"*{ext}"))
 
-    return file_paths
+    return filter_excluded_files(file_paths, module_dir, excluded_directories)

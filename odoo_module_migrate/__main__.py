@@ -117,6 +117,17 @@ def get_parser():
         help="Skip removing migration folder",
     )
 
+    main_parser.add_argument(
+        "-ed",
+        "--excluded-directories",
+        dest="excluded_directories",
+        nargs="*",
+        default=[],
+        help="Directory names that must never be migrated, at any depth of"
+        " the modules. Typically folders holding hand-written compatibility"
+        " code, e.g. 'compat'.",
+    )
+
     return main_parser
 
 
@@ -150,6 +161,7 @@ def main(args=False):
             not args.no_commit,
             args.pre_commit,
             args.remove_migration_folder,
+            args.excluded_directories,
         )
 
         # run Migration

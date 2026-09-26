@@ -7,9 +7,17 @@ import re
 
 
 def replace_tree_with_list_in_views(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
-    files_to_process = tools.get_files(module_path, (".xml", ".js", ".py"))
+    files_to_process = tools.get_files(
+        module_path, (".xml", ".js", ".py"), excluded_directories
+    )
     # Exclude manifest files and static/ directory to avoid corrupting
     # URLs (e.g. GitHub links containing "/tree/main") and other non-view content.
     files_to_process = [
@@ -63,9 +71,15 @@ def replace_tree_with_list_in_views(
 
 
 def replace_chatter_blocks(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
-    files_to_process = tools.get_files(module_path, (".xml",))
+    files_to_process = tools.get_files(module_path, (".xml",), excluded_directories)
 
     reg_chatter_block = r"""<div class=["']oe_chatter["'](?![^>]*position=["'][^"']+["'])[^>]*>[\s\S]*?</div>"""
     reg_xpath_chatter = r"""//div\[hasclass\(['"]oe_chatter['"]\)\]"""
@@ -96,9 +110,17 @@ def replace_chatter_blocks(
 
 
 def replace_deprecated_kanban_box_card_menu(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
-    files_to_process = tools.get_files(module_path, (".xml", ".js", ".py"))
+    files_to_process = tools.get_files(
+        module_path, (".xml", ".js", ".py"), excluded_directories
+    )
     # Exclude manifest files and static/ directory to avoid corrupting
     # URLs (e.g. GitHub links containing "/tree/main") and other non-view content.
     files_to_process = [
@@ -123,9 +145,15 @@ def replace_deprecated_kanban_box_card_menu(
 
 
 def replace_user_has_groups(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
-    files_to_process = tools.get_files(module_path, (".py",))
+    files_to_process = tools.get_files(module_path, (".py",), excluded_directories)
     replaces = {
         r"self\.user_has_groups\(\s*(['\"])([\w\.]+)\1\s*\)": r"self.env.user.has_group(\1\2\1)",
         r"self\.user_has_groups\(\s*(['\"])([^'\"]*[,!][^'\"]*?)\1\s*\)": r"self.env.user.has_groups(\1\2\1)",
@@ -139,9 +167,15 @@ def replace_user_has_groups(
 
 
 def replace_unaccent_parameter(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
-    files_to_process = tools.get_files(module_path, (".py",))
+    files_to_process = tools.get_files(module_path, (".py",), excluded_directories)
     replaces = {
         # Handle multiline with unaccent=False or unaccent=True
         r"(?s)fields\.(Char|Text|Html|Properties)\(\s*unaccent\s*=\s*(False|True)\s*,?\s*\)": r"fields.\1()",
@@ -165,9 +199,15 @@ def replace_unaccent_parameter(
 
 
 def replace_ustr(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
-    files_to_process = tools.get_files(module_path, (".py",))
+    files_to_process = tools.get_files(module_path, (".py",), excluded_directories)
     replaces = {
         r"from\s+odoo\.tools\s+import\s+ustr\s*\n": "",
         r"from\s+odoo\.tools\.misc\s+import\s+ustr\s*\n": "",
@@ -188,9 +228,17 @@ def replace_ustr(
 
 
 def replace_editable_attribute(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
-    files_to_process = tools.get_files(module_path, (".xml", ".js", ".py"))
+    files_to_process = tools.get_files(
+        module_path, (".xml", ".js", ".py"), excluded_directories
+    )
     # Exclude manifest files and static/ directory to avoid corrupting
     # URLs (e.g. GitHub links containing "/tree/main") and other non-view content.
     files_to_process = [
@@ -215,7 +263,13 @@ def replace_editable_attribute(
 
 
 def add_jquery_to_asset_bundles(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
     """From Odoo 18+, jQuery is loaded asynchronously.
     Adding 'web/static/lib/jquery/jquery.js' as the first entry in

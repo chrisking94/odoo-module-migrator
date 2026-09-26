@@ -8,6 +8,8 @@ import os
 import ast
 from typing import Any
 
+from odoo_module_migrate.tools import filter_excluded_files
+
 empty_list = ast.parse("[]").body[0].value
 
 
@@ -236,13 +238,13 @@ def replace_read_group_signature(logger, filename):
             file.write(new_all)
 
 
-def _get_files(module_path, reformat_file_ext):
+def _get_files(module_path, reformat_file_ext, excluded_directories=()):
     """Get files to be reformatted."""
     file_paths = list()
     if not module_path.is_dir():
         raise Exception(f"'{module_path}' is not a directory")
     file_paths.extend(module_path.rglob("*" + reformat_file_ext))
-    return file_paths
+    return filter_excluded_files(file_paths, module_path, excluded_directories)
 
 
 def _check_open_form_view(logger, file_path: Path):
@@ -444,10 +446,16 @@ def _move_attrs_to_attributes_view(logger, file_path: Path):
 
 
 def _check_open_form(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
     reformat_file_ext = ".xml"
-    file_paths = _get_files(module_path, reformat_file_ext)
+    file_paths = _get_files(module_path, reformat_file_ext, excluded_directories)
     logger.debug(f"{reformat_file_ext} files found:\n" f"{list(map(str, file_paths))}")
 
     for file_path in file_paths:
@@ -455,10 +463,16 @@ def _check_open_form(
 
 
 def _move_attrs_to_attributes(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
     reformat_file_ext = ".xml"
-    file_paths = _get_files(module_path, reformat_file_ext)
+    file_paths = _get_files(module_path, reformat_file_ext, excluded_directories)
     logger.debug(f"{reformat_file_ext} files found:\n" f"{list(map(str, file_paths))}")
 
     for file_path in file_paths:
@@ -466,12 +480,18 @@ def _move_attrs_to_attributes(
 
 
 def _reformat_read_group(
-    logger, module_path, module_name, manifest_path, migration_steps, tools
+    logger,
+    module_path,
+    module_name,
+    manifest_path,
+    migration_steps,
+    tools,
+    excluded_directories=(),
 ):
     """Reformat read_group method in py files."""
 
     reformat_file_ext = ".py"
-    file_paths = _get_files(module_path, reformat_file_ext)
+    file_paths = _get_files(module_path, reformat_file_ext, excluded_directories)
     logger.debug(f"{reformat_file_ext} files found:\n" f"{list(map(str, file_paths))}")
 
     reformatted_files = list()

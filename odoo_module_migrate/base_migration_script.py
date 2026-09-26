@@ -144,15 +144,23 @@ class BaseMigrationScript(object):
         migration_steps,
         directory_path,
         commit_enabled,
+        excluded_directories=(),
     ):
         logger.debug(
             "Running %s script" % inspect.getfile(self.__class__).split("/")[-1]
         )
+        excluded_directories = excluded_directories or ()
         self.parse_rules()
         manifest_path = self._get_correct_manifest_path(
             manifest_path, self._FILE_RENAMES
         )
         for root, directories, filenames in os.walk(module_path.resolve()):
+            # Do not descend into excluded directories
+            directories[:] = [
+                directory
+                for directory in directories
+                if directory not in excluded_directories
+            ]
             for filename in filenames:
                 extension = os.path.splitext(filename)[1]
                 if extension not in _ALLOWED_EXTENSIONS:
@@ -177,6 +185,7 @@ class BaseMigrationScript(object):
                     manifest_path=manifest_path,
                     migration_steps=migration_steps,
                     tools=tools,
+                    excluded_directories=excluded_directories,
                 )
 
     def process_file(

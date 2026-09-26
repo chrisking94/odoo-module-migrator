@@ -28,12 +28,16 @@ class Migration:
         commit_enabled=True,
         pre_commit=True,
         remove_migration_folder=True,
+        excluded_directories=None,
     ):
         if not module_names:
             module_names = []
         self._commit_enabled = commit_enabled
         self._pre_commit = pre_commit
         self._remove_migration_folder = remove_migration_folder
+        # Directory names (at any depth) the migration must skip entirely,
+        # e.g. hand-written 'compat' folders.
+        self._excluded_directories = set(excluded_directories or [])
         self._migration_steps = []
         self._migration_scripts = []
         self._module_migrations = []
